@@ -7,3 +7,10 @@ __pycache__/
 deployed_*.json
 docs/deployment_log.json
 .DS_Store
+
+# smoke artifacts
+scripts/smoke_deployer.json
+scripts/smoke_payee.json
+smoke_output.log
+resume_output.log
+d4_output.log
