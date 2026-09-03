@@ -19,18 +19,25 @@ jobs:
           # genlayer-test >= 1.x is a breaking rewrite; the suite is
           # written against the 0.29.x direct-mode API
           pip install "genlayer-test==0.29.2" pytest eth_utils
-      - name: Pre-seed genvm artifacts from vendored copies (pinned, deterministic)
+      - name: Pre-seed verified genvm tarball (from this repo's release mirror)
         run: |
           # The upstream genlayerlabs/genvm release tag v0.3.0-rc7 was
-          # re-published with DIFFERENT std-lib contents (std-lib hash
-          # 10pqy... has no allow_storage; the original 11rhn... does).
-          # Pin-by-tag is therefore unreliable - vendor the exact
-          # extracted artifacts instead of downloading by tag.
-          mkdir -p ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-genlayer/
-          mkdir -p ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-lib-genlayer-std/
-          cp -r vendor/genvm-artifacts/extracted/v0.3.0-rc7/py-genlayer/* ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-genlayer/
-          cp -r vendor/genvm-artifacts/extracted/v0.3.0-rc7/py-lib-genlayer-std/* ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-lib-genlayer-std/
-          ls -la ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-lib-genlayer-std/
+          # RE-PUBLISHED with different std-lib contents (std-lib hash
+          # 10pqy... dropped allow_storage; the original 11rhn... has
+          # it). Pin-by-tag cannot protect against re-published assets.
+          # The verified original tarball is mirrored as a release
+          # asset on THIS repo, fully under our control:
+          #   release: genvm-v0.3.0-rc7-verified
+          #   asset:   genvm-universal-v0.3.0-rc7.tar.xz (128.6 MB)
+          # gltest expects the cache file to be named exactly
+          # genvm-universal-<version>.tar.xz and will extract the
+          # runners from it on first use.
+          mkdir -p ~/.cache/gltest-direct
+          curl -sL -o ~/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz \
+            "https://github.com/faisalnugroho/commitscope-escrow/releases/download/genvm-v0.3.0-rc7-verified/genvm-universal-v0.3.0-rc7.tar.xz"
+          ls -la ~/.cache/gltest-direct/
+          # sanity: must be a real xz archive (magic bytes fd 37 7a 58)
+          head -c 4 ~/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz | od -A n -t x1
       - name: Run direct-mode test suite
         run: python -m pytest tests/direct/ -s --tb=line
       - name: DEBUG cache contents (never blocks)
