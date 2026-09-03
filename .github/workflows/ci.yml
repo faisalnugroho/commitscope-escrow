@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install genlayer-test pytest eth_utils
+      - name: Pre-seed genvm artifact (upstream publishes genvm-runners-all, gltest expects genvm-universal)
+        run: |
+          mkdir -p ~/.cache/gltest-direct
+          VER=$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/genlayerlabs/genvm/releases/latest | sed 's|.*/tag/||')
+          echo "genvm latest: $VER"
+          curl -sL -o ~/.cache/gltest-direct/genvm-universal-$VER.tar.xz "https://github.com/genlayerlabs/genvm/releases/download/$VER/genvm-runners-all.tar.xz"
+          ls -la ~/.cache/gltest-direct/
+      - name: Run direct-mode test suite
+        run: python -m pytest tests/direct/ -q --tb=short
