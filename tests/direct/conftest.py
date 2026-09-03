@@ -1,12 +1,21 @@
 """Shared pytest fixtures for the CommitScopeEscrow direct-mode suite."""
+import sys
+from pathlib import Path
+
 import pytest
 
 from gltest.direct.sdk_loader import setup_sdk_paths
 
-setup_sdk_paths()
+# Pass the CONTRACT PATH so setup_sdk_paths parses the contract header
+# and honors its runner pin (py-genlayer:1jb45...). Without the path,
+# gltest falls back to the "latest" runner in the tarball, whose
+# manifest points at the NEW std-lib (10pqy...) that no longer
+# exports allow_storage -> every contract load fails.
+CONTRACT_PATH = Path(__file__).resolve().parents[2] / \
+    "contracts" / "commit_scope_escrow.py"
+setup_sdk_paths(CONTRACT_PATH)
 
 import genlayer
-import sys
 print(f"[CI-DEBUG] genlayer from: {genlayer.__file__}", file=sys.stderr)
 print(f"[CI-DEBUG] allow_storage: {hasattr(genlayer, 'allow_storage')}", file=sys.stderr)
 
