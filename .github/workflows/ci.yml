@@ -31,7 +31,7 @@ jobs:
           curl -sL -o ~/.cache/gltest-direct/genvm-universal-$VER.tar.xz "https://github.com/genlayerlabs/genvm/releases/download/$VER/genvm-runners-all.tar.xz"
           ls -la ~/.cache/gltest-direct/
       - name: Run direct-mode test suite
-        run: python -m pytest tests/direct/ -q --tb=short
+        run: python -m pytest tests/direct/ -s --tb=line
       - name: DEBUG cache contents (never blocks)
         if: always()
         run: |

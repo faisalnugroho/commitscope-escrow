@@ -6,8 +6,9 @@ from gltest.direct.sdk_loader import setup_sdk_paths
 setup_sdk_paths()
 
 import genlayer
-print(f"[CI-DEBUG] genlayer from: {genlayer.__file__}")
-print(f"[CI-DEBUG] allow_storage: {hasattr(genlayer, 'allow_storage')}")
+import sys
+print(f"[CI-DEBUG] genlayer from: {genlayer.__file__}", file=sys.stderr)
+print(f"[CI-DEBUG] allow_storage: {hasattr(genlayer, 'allow_storage')}", file=sys.stderr)
 
 import helpers as H
 
