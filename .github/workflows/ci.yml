@@ -17,11 +17,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install genlayer-test pytest eth_utils
-      - name: Pre-seed genvm artifact (upstream publishes genvm-runners-all, gltest expects genvm-universal)
+      - name: Pre-seed genvm artifact (pinned; upstream publishes genvm-runners-all, gltest expects genvm-universal)
         run: |
           mkdir -p ~/.cache/gltest-direct
-          VER=$(curl -sIL -o /dev/null -w '%{url_effective}' https://github.com/genlayerlabs/genvm/releases/latest | sed 's|.*/tag/||')
-          echo "genvm latest: $VER"
+          # Pin the exact genvm release the contract was validated
+          # against. The contract header pins py-genlayer:1jb45... but
+          # gltest resolves the STD LIB from the release tarball, and
+          # newer releases dropped `allow_storage` from the top-level
+          # export - version drift here breaks the whole suite.
+          VER=v0.3.0-rc7
           curl -sL -o ~/.cache/gltest-direct/genvm-universal-$VER.tar.xz "https://github.com/genlayerlabs/genvm/releases/download/$VER/genvm-runners-all.tar.xz"
           ls -la ~/.cache/gltest-direct/
       - name: Run direct-mode test suite
