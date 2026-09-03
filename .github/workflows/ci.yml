@@ -39,11 +39,4 @@ jobs:
           # sanity: must be a real xz archive (magic bytes fd 37 7a 58)
           head -c 4 ~/.cache/gltest-direct/genvm-universal-v0.3.0-rc7.tar.xz | od -A n -t x1
       - name: Run direct-mode test suite
-        run: python -m pytest tests/direct/ -s --tb=line
-      - name: DEBUG cache contents (never blocks)
-        if: always()
-        run: |
-          set +e
-          ls -la ~/.cache/gltest-direct/extracted/
-          ls -la ~/.cache/gltest-direct/extracted/*/ 2>/dev/null
-          find ~/.cache/gltest-direct/extracted -maxdepth 3 -name "runner.json" -exec cat {} \;
+        run: python -m pytest tests/direct/ -q --tb=short
