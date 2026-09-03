@@ -19,17 +19,18 @@ jobs:
           # genlayer-test >= 1.x is a breaking rewrite; the suite is
           # written against the 0.29.x direct-mode API
           pip install "genlayer-test==0.29.2" pytest eth_utils
-      - name: Pre-seed genvm artifact (pinned; upstream publishes genvm-runners-all, gltest expects genvm-universal)
+      - name: Pre-seed genvm artifacts from vendored copies (pinned, deterministic)
         run: |
-          mkdir -p ~/.cache/gltest-direct
-          # Pin the exact genvm release the contract was validated
-          # against. The contract header pins py-genlayer:1jb45... but
-          # gltest resolves the STD LIB from the release tarball, and
-          # newer releases dropped `allow_storage` from the top-level
-          # export - version drift here breaks the whole suite.
-          VER=v0.3.0-rc7
-          curl -sL -o ~/.cache/gltest-direct/genvm-universal-$VER.tar.xz "https://github.com/genlayerlabs/genvm/releases/download/$VER/genvm-runners-all.tar.xz"
-          ls -la ~/.cache/gltest-direct/
+          # The upstream genlayerlabs/genvm release tag v0.3.0-rc7 was
+          # re-published with DIFFERENT std-lib contents (std-lib hash
+          # 10pqy... has no allow_storage; the original 11rhn... does).
+          # Pin-by-tag is therefore unreliable - vendor the exact
+          # extracted artifacts instead of downloading by tag.
+          mkdir -p ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-genlayer/
+          mkdir -p ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-lib-genlayer-std/
+          cp -r vendor/genvm-artifacts/extracted/v0.3.0-rc7/py-genlayer/* ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-genlayer/
+          cp -r vendor/genvm-artifacts/extracted/v0.3.0-rc7/py-lib-genlayer-std/* ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-lib-genlayer-std/
+          ls -la ~/.cache/gltest-direct/extracted/v0.3.0-rc7/py-lib-genlayer-std/
       - name: Run direct-mode test suite
         run: python -m pytest tests/direct/ -s --tb=line
       - name: DEBUG cache contents (never blocks)
