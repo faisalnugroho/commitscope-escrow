@@ -1,0 +1,14 @@
+[project]
+name = "commitscope-escrow"
+version = "0.1.0"
+description = "CommitScopeEscrow - GenLayer Intelligent Contract: commit-hash + diff-scope anchored escrow with GitHub-verified release conditions"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["genlayer-test", "pytest", "eth_utils"]
+deploy = ["genlayer-py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,9 @@
+# gitignore
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.keyfile.json
+deployed_*.json
+docs/deployment_log.json
+.DS_Store
