@@ -32,3 +32,9 @@ jobs:
           ls -la ~/.cache/gltest-direct/
       - name: Run direct-mode test suite
         run: python -m pytest tests/direct/ -q --tb=short
+      - name: DEBUG resolved genlayer module
+        if: always()
+        run: |
+          pip show genlayer-test
+          python -c "import genlayer; print('genlayer from:', genlayer.__file__); print('allow_storage:', hasattr(genlayer, 'allow_storage'))"
+          ls -la ~/.cache/gltest-direct/extracted/ 2>/dev/null || true
