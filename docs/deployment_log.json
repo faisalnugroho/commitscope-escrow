@@ -1,0 +1,111 @@
+{
+  "contract": "0xAB8378c82C9EEee4ABDD979bb978FBB33ADe80E5",
+  "deploy_tx": "0xb0f91d9bb4a7ea224675718f726e92e8d42eb291342bb70dbcce838bf05b305a",
+  "note": "Clean evidence log: verdicts, transaction hashes, and condition checks, all read back from the live Studionet contract via get_deal. Tx-to-deal mapping verified by decoding each transaction calldata and correlating tx created_at with the deal's created_at_epoch (exact match for every create). No private keys or secrets are stored in this file; smoke keyfiles are gitignored and never tracked.",
+  "deals": {
+    "d1": {
+      "scenario": "S1 - Released (ancestry + scope + CI all positively proven)",
+      "verdict": "Released",
+      "status": "Released",
+      "create_tx": "0x0d88def7e0f9680102945cfddfeda641109969ff1bff8d7482c601ee28b8ccb7",
+      "submit_tx": "0x23d58989caa5cee3170c87e0d236d8fdfd648ef4460574b331034c5ef7ba3b32",
+      "verify_tx": "0x0f1396f966b353f0b9a57cd189c832332674a3cb343082505d048623461b8db3",
+      "condition_checks": [
+        {
+          "condition": "commit_ancestry",
+          "status": "PASS",
+          "evidence": "compare status is ahead - positive ancestry proof"
+        },
+        {
+          "condition": "diff_scope",
+          "status": "PASS",
+          "evidence": "all 2 changed files within allowed scope"
+        },
+        {
+          "condition": "ci_status",
+          "status": "PASS",
+          "evidence": "LLM cross-check confirms green CI: check_runs contains one entry with status 'completed' and conclusion 'success'"
+        }
+      ]
+    },
+    "d2": {
+      "scenario": "S2 - Rejected (changed files outside allowed contracts/ scope)",
+      "verdict": "Rejected",
+      "status": "Rejected",
+      "create_tx": "0x9d770f45a47aff628a9ffcecd5fb8c9831e1a2ce588beebc590d861d5f43df04",
+      "submit_tx": "0x616721e750c32fef8977b1eda6f01731d1eedf0948c2e6f1e7f76b416ad7b390",
+      "verify_tx": "0x5134adbcbd47833c5b7900892ef35840eeed3cdb4379e079af3087ff706223b1",
+      "condition_checks": [
+        {
+          "condition": "commit_ancestry",
+          "status": "PASS",
+          "evidence": "compare status is ahead - positive ancestry proof"
+        },
+        {
+          "condition": "diff_scope",
+          "status": "FAIL",
+          "evidence": "files outside allowed scope: .github/workflows/ci.yml,tests/direct/conftest.py"
+        },
+        {
+          "condition": "ci_status",
+          "status": "PASS",
+          "evidence": "LLM cross-check confirms green CI: all check-runs are 'completed' with conclusion 'success'"
+        }
+      ]
+    },
+    "d3": {
+      "scenario": "S3a - Undetermined (payee submitted a nonexistent commit sha; GitHub compare 404) plus S4 - dispute round 2 re-ran the same consensus and stayed Undetermined (fail-safe on the dispute path)",
+      "verdict": "Undetermined",
+      "status": "Undetermined",
+      "round": 2,
+      "disputes": 1,
+      "create_tx": "0x989c37d03cc63a09ce3a901a6219dbbbc8543ccef230d1a0670eb4e9bebad214",
+      "submit_tx": "0x8e230e7e8e4c2b534ae9c9b65377012decfcee1a2418f610deb92dffc03ae495",
+      "verify_tx": "0x9dd24f05047d0f20b4f0b39604c4dfe96af9b2fbcca40e6c90ed329cac1bd11c",
+      "dispute_tx": "0x022e10910ba6bcaed5802929e642db229361fcf33a1bb87899d4a0fe42f5ffe3",
+      "verify_round2_tx": "0x6e10b218e0a9761cfa37b2f7d6f5913084991d39646160170593bb30c22ff347",
+      "condition_checks": [
+        {
+          "condition": "commit_ancestry",
+          "status": "UNCERTAIN",
+          "evidence": "compare view failed: http_status_404"
+        },
+        {
+          "condition": "diff_scope",
+          "status": "UNCERTAIN",
+          "evidence": "compare view failed: http_status_404"
+        },
+        {
+          "condition": "ci_status",
+          "status": "UNCERTAIN",
+          "evidence": "compare view failed: http_status_404"
+        }
+      ]
+    },
+    "d4": {
+      "scenario": "S3b - Undetermined (nonexistent repository faisalnugroho/this-repo-does-not-exist-xyz; GitHub compare 404)",
+      "verdict": "Undetermined",
+      "status": "Undetermined",
+      "create_tx": "0x0eecf7481bdaf1b033eb92f973f6bcd4bd72f529f90b53b4a66ed678ac2bd13a",
+      "submit_tx": "0xa75963bfb2bb7e80b7ec8fd015d676144b2cf6f057ff9f6ca81bb5bc35b27974",
+      "verify_tx": "0x76fb206e38551193639a3d2a7dbbb8d06d34f82c6a909111dd6c98d79e2a6dfa",
+      "condition_checks": [
+        {
+          "condition": "commit_ancestry",
+          "status": "UNCERTAIN",
+          "evidence": "compare view failed: http_status_404"
+        },
+        {
+          "condition": "diff_scope",
+          "status": "UNCERTAIN",
+          "evidence": "compare view failed: http_status_404"
+        },
+        {
+          "condition": "ci_status",
+          "status": "UNCERTAIN",
+          "evidence": "compare view failed: http_status_404"
+        }
+      ]
+    }
+  }
+}
