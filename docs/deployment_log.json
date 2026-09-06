@@ -122,15 +122,57 @@
       ]
     },
     "S6": {
-      "verdict": "Undetermined",
-      "status": "Undetermined",
+      "verdict": "Rejected",
+      "status": "Rejected",
+      "round": 2,
       "create_tx": "0x0230ee6cf6257f2598345d4d52ddeb5e65bd2f3acb1953fbc80aced1f6ba5047",
-      "scope_evidence": [
-        "compare view failed: http_status_403",
-        "compare view failed: http_status_403",
-        "compare view failed: http_status_403"
+      "submit_tx": "0x83f18c873f124edfeef4f6db28e10db360c5b64cbacbd45f3218e1bae6476124",
+      "first_verify_tx": "0xb090e16c03ecbc299f2b99ff1f64539ac1e12185ae3d922a32911aa20d6db574",
+      "dispute_tx": "0xfd860ca1c0b9bcac2fda2f3b8a75a5692e0704abc35119e0c8ca2eac007ee541",
+      "verify_round2_tx": "0xe322f774d58edc8adf5896028c7123ea640c15be10de424e30c34273cd74693f",
+      "condition_checks": [
+        {
+          "condition": "commit_ancestry",
+          "status": "PASS",
+          "evidence": "compare status is ahead - positive ancestry proof"
+        },
+        {
+          "condition": "diff_scope",
+          "status": "FAIL",
+          "evidence": "files outside allowed scope: docs/smoke_rename_provenance.md (renamed from, source path)"
+        },
+        {
+          "condition": "ci_status",
+          "status": "PASS",
+          "evidence": "LLM cross-check confirms green CI: The checks view shows exactly one check-run ('test') with status 'completed' and conclusion 'success', satisfying the requirement for provably green CI."
+        }
       ]
     }
   },
-  "finished": "2026-09-06T04:10:23Z"
+  "finished": "2026-09-06T04:10:23Z",
+  "s6_retry": {
+    "dispute_tx": "0xfd860ca1c0b9bcac2fda2f3b8a75a5692e0704abc35119e0c8ca2eac007ee541",
+    "dispute_secs": 36.8,
+    "verify_tx": "0xe322f774d58edc8adf5896028c7123ea640c15be10de424e30c34273cd74693f",
+    "verify_secs": 73.7,
+    "verdict": "Rejected",
+    "round": 2,
+    "condition_checks": [
+      {
+        "condition": "commit_ancestry",
+        "status": "PASS",
+        "evidence": "compare status is ahead - positive ancestry proof"
+      },
+      {
+        "condition": "diff_scope",
+        "status": "FAIL",
+        "evidence": "files outside allowed scope: docs/smoke_rename_provenance.md (renamed from, source path)"
+      },
+      {
+        "condition": "ci_status",
+        "status": "PASS",
+        "evidence": "LLM cross-check confirms green CI: The checks view shows exactly one check-run ('test') with status 'completed' and conclusion 'success', satisfying the requirement for provably green CI."
+      }
+    ]
+  }
 }

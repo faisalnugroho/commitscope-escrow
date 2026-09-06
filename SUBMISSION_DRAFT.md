@@ -236,7 +236,15 @@ must FAIL it citing the source path.
 |---|---|
 | create_deal (allowed_paths=`tests/`) | `0x0230ee6cf6257f2598345d4d52ddeb5e65bd2f3acb1953fbc80aced1f6ba5047` |
 | submit_commit (rename head `8540d9b`) | `0x83f18c873f124edfeef4f6db28e10db360c5b64cbacbd45f3218e1bae6476124` |
-| request_verification → **Rejected** | S6_RETRY_VERIFY_TX_HASH |
+| request_verification → Undetermined (rate-limit 403, fail-safe) | `0xb090e16c03ecbc299f2b99ff1f64539ac1e12185ae3d922a32911aa20d6db574` |
+| dispute (payee, designed recovery path) | `0xfd860ca1c0b9bcac2fda2f3b8a75a5692e0704abc35119e0c8ca2eac007ee541` |
+| request_verification round 2 → **Rejected** | `0xe322f774d58edc8adf5896028c7123ea640c15be10de424e30c34273cd74693f` |
+
+(The first verify attempt hit the anonymous GitHub quota mid-run →
+403 → the contract fail-safed to Undetermined — no wrong verdict, no
+funds moved. After the quota window reset, the payee disputed once and
+the SAME consensus re-ran and resolved to Rejected, completing the
+proof. Both behaviors are the documented fail-safe design.)
 
 On-chain condition checks:
 - commit_ancestry: **PASS** — "compare status is ahead - positive ancestry proof"
