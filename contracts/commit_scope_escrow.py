@@ -19,8 +19,15 @@ GitHub API evidence:
     R2. DIFF SCOPE - every file changed between base and head lies within
         the payer-agreed allowed_paths. Positive proof via the compare
         API `files[].filename`, compared one file at a time against the
-        allowed list (exact path or directory prefix). Never commit
-        messages, never PR bodies, never keyword matching.
+        allowed list (exact path or directory prefix). RENAMED files are
+        validated on BOTH sides: `previous_filename` (the source path)
+        and `filename` (the destination) must each lie within the
+        allowed paths - an out-of-scope source path cannot disappear
+        via a rename into the allowed scope. A capped/truncated compare
+        response (paginated diffs beyond the 300-file page limit, a
+        `truncated` flag, or count/array mismatch) is PARTIAL evidence
+        and can never prove scope. Never commit messages, never PR
+        bodies, never keyword matching.
     R3. CI STATUS - the submitted commit's real CI state is green.
         Positive proof via the Checks API (`check-runs` all
         status="completed" AND conclusion="success") or the legacy
@@ -79,9 +86,12 @@ there is no separate branch)
 1. Every external API call goes through _gh_get(), the ONE centralized
    helper: non-2xx (404/429/403/5xx), empty body, malformed JSON, or
    any exception is a fetch failure -> Undetermined.
-2. Positive proof only: absence of violation is never proof.
+2. Positive proof only: absence of violation is never proof. Partial
+   evidence (capped/truncated/paginated compare responses) is never
+   proof either - the same Undetermined fail-safe.
 3. Dispute re-verification = the identical consensus function.
-4. Scope check uses the actual compare diff, file by file.
+4. Scope check uses the actual compare diff, file by file, including
+   both sides of every rename (previous_filename + filename).
 5. CI status comes from the commit's real check-runs/statuses.
 6. Empty or ambiguous allowed_paths is rejected AT CREATION, so no
    deal can ever exist whose scope was unverifiable from the start.
@@ -779,7 +789,18 @@ def _fetch_comparison(repo: str, base_sha: str, head_sha: str):
     the changed filenames. Explicit 'behind'/'diverged' carries
     ancestry_diverged=True (positive proof of non-descent). Anything
     else - fetch failure, missing status field, missing files array,
-    a file without a filename - is NOT provable."""
+    a file without a filename - is NOT provable.
+
+    TRUNCATION GUARD: the GitHub compare endpoint is paginated and
+    capped - when a diff touches more files than the page cap (300),
+    GitHub returns an INCOMPLETE files array (a partial view of the
+    diff, sometimes with a top-level truncated flag). Scope can never
+    be positively proven from partial data, so any indication that
+    the files array is capped or incomplete (explicit truncated flag,
+    more files than the cap, or a files/commits count that does not
+    match the array lengths) makes the view NOT provable ->
+    Undetermined, the same fail-safe as any other API failure. A
+    partial diff must NEVER pass diff_scope."""
     url = (GH_API_BASE + "/repos/" + repo + "/compare/" + base_sha
            + "..." + head_sha)
     ok, code, parsed, err = _gh_get(url)
@@ -796,16 +817,50 @@ def _fetch_comparison(repo: str, base_sha: str, head_sha: str):
     if len(files) > MAX_COMPARE_FILES:
         return {"view": "compare", "ok": False,
                 "err": "diff_too_large_to_verify"}
+    if parsed.get("truncated") is True:
+        return {"view": "compare", "ok": False,
+                "err": "compare_response_truncated"}
+    if len(files) >= MAX_COMPARE_FILES:
+        # At the exact cap the response is at GitHub's paging boundary:
+        # we cannot distinguish a complete 300-file diff from a capped
+        # first page, so completeness is NOT provable (fail-safe).
+        return {"view": "compare", "ok": False,
+                "err": "diff_at_file_cap_not_provable"}
+    total_commits = parsed.get("total_commits")
+    if isinstance(total_commits, int) and total_commits > 0:
+        commits = parsed.get("commits")
+        if not isinstance(commits, list) or len(commits) != total_commits:
+            # count/array mismatch means the response was paginated/
+            # capped: the payload is not the complete evidence set.
+            return {"view": "compare", "ok": False,
+                    "err": "commits_count_mismatch_paginated"}
     names = []
+    prevs = []
     for f in files:
         if not isinstance(f, dict):
             return {"view": "compare", "ok": False, "err": "file_not_object"}
         fn = f.get("filename")
         if not isinstance(fn, str) or len(fn) == 0:
             return {"view": "compare", "ok": False, "err": "filename_missing"}
+        fstat = f.get("status")
+        pf = f.get("previous_filename")
+        if fstat == "renamed":
+            # a rename without its source path cannot be scope-checked:
+            # the old path is unknown -> the scope is NOT provable
+            if not isinstance(pf, str) or len(pf) == 0:
+                return {"view": "compare", "ok": False,
+                        "err": "renamed_missing_previous_filename"}
+            prevs.append(pf)
+        elif isinstance(pf, str) and len(pf) > 0:
+            # unexpected per-file status, but a previous path IS claimed:
+            # validate it too (extra safety can never create a false PASS)
+            prevs.append(pf)
+        else:
+            prevs.append("")
         names.append(fn)
     out = {"view": "compare", "ok": True, "err": "",
-           "compare_status": status, "changed_files": names}
+           "compare_status": status, "changed_files": names,
+           "previous_files": prevs}
     if status == "behind" or status == "diverged":
         out["ancestry_diverged"] = True
     return out
@@ -1027,10 +1082,25 @@ def _apply_fetched_data_gates(res, compare, checks, statusv,
         cc[1]["evidence"] = "diff scope unverifiable without compare data"
     else:
         changed = compare.get("changed_files", [])
+        previous = compare.get("previous_files", [])
         violations = []
-        for fn in changed:
-            if not _path_covered(fn, allowed_paths):
+        i = 0
+        while i < len(changed):
+            fn = changed[i]
+            ok_fn = _path_covered(fn, allowed_paths)
+            # RENAME SCOPE CHECK: a renamed file's SOURCE path is part
+            # of the diff. An out-of-scope source path cannot disappear
+            # via a rename into the allowed scope - BOTH the previous
+            # (old) filename and the current (new) filename must lie
+            # within allowed_paths. Either side out of scope -> FAIL.
+            pf = ""
+            if i < len(previous):
+                pf = previous[i]
+            if not ok_fn:
                 violations.append(fn)
+            elif len(pf) > 0 and not _path_covered(pf, allowed_paths):
+                violations.append(pf + " (renamed from, source path)")
+            i += 1
         if len(violations) > 0:
             cc[1]["status"] = "FAIL"
             cc[1]["evidence"] = ("files outside allowed scope: "
@@ -1038,7 +1108,9 @@ def _apply_fetched_data_gates(res, compare, checks, statusv,
         else:
             cc[1]["status"] = "PASS"
             cc[1]["evidence"] = ("all " + str(len(changed))
-                                 + " changed files within allowed scope")
+                                 + " changed files within allowed scope"
+                                 + " (renames validated on both source"
+                                 + " and destination paths)")
 
     # ---- ci_status (LLM-interpreted, clamped by data state) ----
     data_state = _ci_data_state(checks, statusv)
@@ -1168,8 +1240,11 @@ def _build_prompt(repo, base_sha, head_sha, allowed_paths_csv,
     p += "UNCERTAIN.\n"
     p += "  diff_scope: PASS only if every changed file in the compare "
     p += "view lies within the allowed paths (exact file path or "
-    p += "inside an allowed directory). Any file outside the allowed "
-    p += "paths is FAIL with the filename cited.\n"
+    p += "inside an allowed directory). For a RENAMED file BOTH its "
+    p += "current filename AND its previous filename must lie within "
+    p += "the allowed paths - an out-of-scope source path does not "
+    p += "disappear via a rename. Any file outside the allowed paths "
+    p += "is FAIL with the filename cited.\n"
     p += "  ci_status: PASS only if the commit's CI is PROVABLY green: "
     p += "every check-run has status 'completed' with conclusion "
     p += "'success', or the legacy combined status state is 'success'. "

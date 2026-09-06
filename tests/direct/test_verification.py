@@ -329,6 +329,244 @@ class TestCiGate:
         assert checks[2]["status"] == "PASS"
 
 
+class TestTruncatedCompareUndetermined:
+    """Boundary fix: the GitHub compare API is paginated and capped.
+    A truncated/capped files array is PARTIAL diff data - scope can
+    never be positively proven from it, so it must resolve to
+    Undetermined exactly like any other API failure, never a
+    diff_scope PASS on partial data."""
+
+    def _deal_submitted(self, vm, c, alice, bob):
+        did = H.create(vm, c, alice, bob)
+        H.submit(vm, c, bob, did)
+        return did
+
+    def test_truncated_flag_true_undetermined(self, direct_vm, env,
+                                               direct_alice,
+                                               direct_bob):
+        """Compare response carries truncated=true -> Undetermined."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        direct_vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(H.raw_compare_payload("ahead", files=[], renamed=[],
+                                            truncated=True)))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Undetermined"
+        assert all(c["status"] == "UNCERTAIN" for c in checks)
+        assert "truncated" in checks[0]["evidence"]
+
+    def test_over_cap_files_undetermined(self, direct_vm, env,
+                                         direct_alice, direct_bob):
+        """File count exceeds the 300 cap -> Undetermined (not provable)."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        files = ["src/widgets/f%03d.py" % i for i in range(301)]
+        direct_vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(H.raw_compare_payload("ahead", files=files)))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Undetermined"
+        assert all(c["status"] == "UNCERTAIN" for c in checks)
+
+    def test_at_exact_cap_not_provable_undetermined(self, direct_vm, env,
+                                                     direct_alice,
+                                                     direct_bob):
+        """Exactly 300 files = the paging boundary: a complete 300-file
+        diff and a capped first page are indistinguishable, so
+        completeness is NOT provable -> Undetermined (fail-safe)."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        files = ["src/widgets/f%03d.py" % i for i in range(300)]
+        direct_vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(H.raw_compare_payload("ahead", files=files)))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Undetermined"
+        assert "cap" in checks[0]["evidence"] or \
+            "diff" in checks[0]["evidence"]
+
+    def test_commits_count_mismatch_paginated_undetermined(
+            self, direct_vm, env, direct_alice, direct_bob):
+        """total_commits (250) does not match the commits array length
+        (1) - the paginated/capped response shape -> Undetermined."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        direct_vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(H.raw_compare_payload(
+                "ahead", files=["src/widgets/core.py"],
+                total_commits=250, commits_len=1)))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Undetermined"
+        assert all(c["status"] == "UNCERTAIN" for c in checks)
+
+    def test_consistent_small_compare_still_processes(self, direct_vm,
+                                                      env, direct_alice,
+                                                      direct_bob):
+        """Sanity: a small, consistent, non-truncated compare payload
+        (counts match, no flags) still processes normally - the guard
+        must not break the happy path."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        vm = direct_vm
+        vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(H.raw_compare_payload(
+                "ahead", files=["src/widgets/core.py"],
+                total_commits=1, commits_len=1, truncated=False)))
+        vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/commits/"
+            + H.HEAD_SHA + "/check-runs$",
+            H.gh_body(H.raw_checks_payload()))
+        vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/commits/"
+            + H.HEAD_SHA + "/status$",
+            H.gh_body(H.raw_status_payload("success")))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Released"
+        assert checks[1]["status"] == "PASS"
+
+
+class TestRenamedFileScope:
+    """Boundary fix: GitHub compare marks renames with status='renamed'
+    and exposes previous_filename. The scope gate must validate BOTH
+    the destination filename AND the previous (source) filename
+    against allowed_paths - either side out of scope is a FAIL."""
+
+    def _deal_submitted(self, vm, c, alice, bob, paths=None):
+        did = H.create(vm, c, alice, bob,
+                       paths=paths if paths is not None else
+                       "src/widgets/,tests/")
+        H.submit(vm, c, bob, did)
+        return did
+
+    def test_rename_out_of_scope_source_rejected(self, direct_vm, env,
+                                                  direct_alice,
+                                                  direct_bob):
+        """Renamed from OUT of allowed_paths INTO allowed_paths ->
+        still Rejected: the out-of-scope previous_filename is detected
+        (it cannot 'disappear' via the rename)."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        # docs/legacy_notes.md is OUT of scope; src/widgets/notes.py
+        # is IN scope. Old code (filename-only) wrongly passed this.
+        H.register_renamed_mocks(
+            direct_vm,
+            renamed=[("docs/legacy_notes.md", "src/widgets/notes.py")])
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Rejected"
+        assert checks[1]["status"] == "FAIL"
+        assert "docs/legacy_notes.md" in checks[1]["evidence"]
+        assert "renamed from" in checks[1]["evidence"]
+
+    def test_rename_in_scope_to_in_scope_released(self, direct_vm, env,
+                                                  direct_alice,
+                                                  direct_bob):
+        """Renamed from one allowed path to another allowed path ->
+        Released: both sides of the rename are inside the scope."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        # src/widgets/core.py -> src/widgets/engine.py: both covered
+        # by the src/widgets/ prefix in the default PATHS.
+        H.register_renamed_mocks(
+            direct_vm,
+            renamed=[("src/widgets/core.py", "src/widgets/engine.py")])
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Released"
+        assert checks[1]["status"] == "PASS"
+        assert "renames validated" in checks[1]["evidence"]
+
+    def test_rename_destination_out_of_scope_rejected(self, direct_vm,
+                                                      env, direct_alice,
+                                                      direct_bob):
+        """Renamed from an allowed path to a path OUTSIDE the scope ->
+        Rejected (the destination filename itself is the violation)."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        H.register_renamed_mocks(
+            direct_vm,
+            renamed=[("src/widgets/core.py", "outside/renamed.py")])
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Rejected"
+        assert checks[1]["status"] == "FAIL"
+        assert "outside/renamed.py" in checks[1]["evidence"]
+
+    def test_renamed_without_previous_filename_undetermined(
+            self, direct_vm, env, direct_alice, direct_bob):
+        """status='renamed' but previous_filename missing/empty: the
+        source path is unknown, so scope is NOT provable ->
+        Undetermined (never a blind PASS)."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        # hand-build the payload: renamed entry without previous path
+        payload = {
+            "status": "ahead", "ahead_by": 1, "total_commits": 1,
+            "files": [{"filename": "src/widgets/notes.py",
+                       "status": "renamed"}],
+        }
+        direct_vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(payload))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Undetermined"
+        assert all(c["status"] == "UNCERTAIN" for c in checks)
+
+    def test_mixed_rename_and_normal_files_released(self, direct_vm,
+                                                    env, direct_alice,
+                                                    direct_bob):
+        """A normal in-scope modification plus an in-scope rename in
+        the same diff -> Released (rename handling composes with the
+        ordinary file-by-file check)."""
+        did = self._deal_submitted(direct_vm, env, direct_alice,
+                                    direct_bob)
+        vm = direct_vm
+        vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/compare/"
+            + H.BASE_SHA + "\\.\\.\\." + H.HEAD_SHA + "$",
+            H.gh_body(H.raw_compare_payload(
+                "ahead", files=["src/widgets/render.py"],
+                renamed=[("src/widgets/core.py",
+                          "src/widgets/engine.py")])))
+        vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/commits/"
+            + H.HEAD_SHA + "/check-runs$",
+            H.gh_body(H.raw_checks_payload()))
+        vm.mock_web(
+            "api\\.github\\.com/repos/acme-org/widgets/commits/"
+            + H.HEAD_SHA + "/status$",
+            H.gh_body(H.raw_status_payload("success")))
+        H.mock_llm_verdict(direct_vm, ["PASS", "PASS", "PASS"])
+        verify(direct_vm, env, direct_alice, did)
+        checks, verdict = read_checks(env, did)
+        assert verdict == "Released"
+        assert checks[1]["status"] == "PASS"
+
+
 class TestPermissionlessTrigger:
     def test_anyone_can_trigger_verification(self, direct_vm, env,
                                              direct_alice, direct_bob,

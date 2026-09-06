@@ -114,13 +114,16 @@ def submit(vm, c, payee, deal_id, sha=HEAD_SHA):
 # ---- GitHub API view builders ----------------------------------------------
 
 
-def compare_view(status="ahead", files=None):
-    """compare API view. status: ahead|identical|behind|diverged."""
+def compare_view(status="ahead", files=None, previous=None):
+    """compare API view. status: ahead|identical|behind|diverged.
+    previous: parallel list of previous_filenames ('' when the file
+    was not renamed) - same length as files when given."""
     return {
         "view": "compare", "ok": True, "err": "",
         "compare_status": status,
         "changed_files": files if files is not None else
         ["src/widgets/core.py", "src/widgets/render.py"],
+        "previous_files": previous if previous is not None else [],
     }
 
 
@@ -161,17 +164,44 @@ def gh_body(payload, status_code=200):
     }
 
 
-def raw_compare_payload(status="ahead", files=None):
-    """Raw GitHub compare API response payload."""
-    return {
+def raw_compare_payload(status="ahead", files=None, renamed=None,
+                        truncated=None, total_commits=None,
+                        commits_len=None):
+    """Raw GitHub compare API response payload.
+
+    files: list of plain filenames (each becomes {filename, status}).
+    renamed: list of (previous_filename, new_filename) tuples - each
+      becomes {filename, status: 'renamed', previous_filename}.
+    truncated: sets the top-level truncated flag (None omits it).
+    total_commits / commits_len: when both are given, a commits array
+      of commits_len stub entries is included alongside total_commits
+      (make them differ to simulate count/array mismatch - the
+      paginated/capped response shape).
+    """
+    body_files = []
+    for f in (files if files is not None else
+              ["src/widgets/core.py", "src/widgets/render.py"]):
+        body_files.append({"filename": f, "status": "modified"})
+    for pf, nf in (renamed or []):
+        body_files.append({"filename": nf, "status": "renamed",
+                            "previous_filename": pf})
+    payload = {
         "status": status,
         "ahead_by": 1 if status == "ahead" else 0,
         "behind_by": 0,
         "total_commits": 1 if status == "ahead" else 0,
-        "files": [{"filename": f} for f in (files if files is not None
-                   else ["src/widgets/core.py",
-                         "src/widgets/render.py"])],
+        "commits": [{"sha": "e" * 40}] if status == "ahead" else [],
+        "files": body_files,
     }
+    if total_commits is not None:
+        payload["total_commits"] = total_commits
+        payload["commits"] = [{"sha": "f" * 40}
+                              for _ in range(commits_len
+                                             if commits_len is not None
+                                             else total_commits)]
+    if truncated is not None:
+        payload["truncated"] = truncated
+    return payload
 
 
 def raw_checks_payload(runs=None, total=None):
@@ -235,6 +265,27 @@ def register_poisoned_checks(vm, repo=REPO, head=HEAD_SHA,
         "api\\.github\\.com/repos/" + repo.replace(".", "\\.")
         + "/commits/" + head + "/check-runs$",
         gh_body(payload, status_code=http_status))
+
+
+def register_renamed_mocks(vm, renamed, repo=REPO, base=BASE_SHA,
+                           head=HEAD_SHA, compare_status="ahead",
+                           runs=None, status_state="success"):
+    """Register the full good-path mock set with a compare payload that
+    contains renamed files (list of (previous, new) tuples). CI views
+    are green so ONLY the rename scope logic decides the verdict."""
+    vm.mock_web(
+        "api\\.github\\.com/repos/" + repo.replace(".", "\\.")
+        + "/compare/" + base + "\\.\\.\\." + head + "$",
+        gh_body(raw_compare_payload(compare_status, files=[],
+                                    renamed=renamed)))
+    vm.mock_web(
+        "api\\.github\\.com/repos/" + repo.replace(".", "\\.")
+        + "/commits/" + head + "/check-runs$",
+        gh_body(raw_checks_payload(runs)))
+    vm.mock_web(
+        "api\\.github\\.com/repos/" + repo.replace(".", "\\.")
+        + "/commits/" + head + "/status$",
+        gh_body(raw_status_payload(status_state)))
 
 
 def cond_verdicts(statuses, evidence="API data substantiates this "
