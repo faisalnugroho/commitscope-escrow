@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
-"""CommitScopeEscrow - Studionet deploy + 4-scenario live smoke test.
+"""CommitScopeEscrow - Studionet deploy + 6-scenario live smoke test
+(boundary-fix round: capped-diff guard + rename scope validation).
 
-Scenarios (spec STOP 2):
-  S1 Released       - deal anchored to this repo, base b47dd6f (CI green),
-                      head 0f87385 (CI green), scope=README.md - all three
-                      conditions provable -> Released
-  S2 Rejected       - same real commits, but allowed_paths=contracts/ so
-                      README.md is provably OUT OF SCOPE -> Rejected with
-                      the filename cited
-  S3 Undetermined   - deal anchored to a nonexistent repo+commit -> compare
-                      API 404s -> Undetermined (fail-safe)
-  S4 Dispute        - payee disputes S3 with an evidence URL; the primary
-                      GitHub evidence still 404s -> STAYS Undetermined
-                      (fail-safe identical on the dispute path)
+Scenarios:
+  S1 Released      - real repo commits, both changed files in scope,
+                     green CI -> Released
+  S2 Rejected      - same real commits, allowed_paths=contracts/ ->
+                     changed files provably out of scope -> Rejected
+  S3 Undetermined  - nonexistent repo -> compare 404 -> Undetermined
+  S4 Dispute       - payee disputes S3; same consensus re-runs with an
+                     evidence URL; primary evidence still 404s ->
+                     STAYS Undetermined (fail-safe on the dispute path)
+  S5 Released (rename in-scope -> in-scope) - real git-mv rename
+                     tests/direct/helpers.py -> tests/direct/gh_helpers.py
+                     inside allowed_paths=tests/ -> Released
+  S6 Rejected (rename out-of-scope -> in-scope) - real git-mv rename
+                     docs/smoke_rename_provenance.md ->
+                     tests/direct/smoke_rename_provenance.md with
+                     allowed_paths=tests/ -> Rejected with the SOURCE
+                     path cited (previous_filename out of scope)
 
-Each write is FULL CONSENSUS (not leader_only). Verdicts are verified by
-READING BACK on-chain state (get_deal), never by trusting the receipt
-alone. All tx hashes + timings are logged to docs/deployment_log.json.
+Each write is FULL CONSENSUS (not leader_only). Verdicts are verified
+by READING BACK on-chain state (get_deal), never by trusting the
+receipt alone. All tx hashes + timings are logged to
+docs/deployment_log.json.
 """
 import json
 import sys
@@ -34,10 +41,23 @@ LOG_PATH = Path("docs/deployment_log.json")
 
 # Real, verifiable GitHub evidence for this repo
 REPO = "faisalnugroho/commitscope-escrow"
-BASE_SHA = "b47dd6f200b567b0d9023edf59c726bb526a88f9"  # CI-green commit
-HEAD_SHA = "0f87385f86e86d60d366a44a23b1a084eb4862e7"  # CI-green commit (verified full sha via git rev-parse)
 
-# S3/S4: genuinely nonexistent repo+commit (compare 404)
+# S1/S2: original proven commits (unchanged evidence pair)
+BASE_SHA = "b47dd6f200b567b0d9023edf59c726bb526a88f9"
+HEAD_SHA = "0f87385f86e86d60d366a44a23b1a084eb4862e7"
+
+# S5: rename in-scope -> in-scope (helpers.py -> gh_helpers.py)
+# CI-green commits; compare reports status=renamed with
+# previous_filename, BOTH paths inside tests/
+R1_BASE = "d03491298aef16e1c5aaeb46dca914bd1fa6fe33"
+R1_HEAD = "41f0a7f8d1fcc0d315ce3ccd18b3f5dcdb7af8ea"
+
+# S6: rename out-of-scope -> in-scope (docs/... -> tests/direct/...)
+# CI-green commits; previous_filename is OUTSIDE allowed_paths=tests/
+R2_BASE = "dd1b09db429b2cdc5255205dc52f6d8af92daf24"
+R2_HEAD = "8540d9bda4aba3e6cf3f814fcbf52ad4e9918401"
+
+# S3/S4: genuinely nonexistent repo (compare 404)
 GHOST_REPO = "faisalnugroho/this-repo-does-not-exist-xyz"
 GHOST_SHA = "d" * 40
 
@@ -125,6 +145,16 @@ def create_deal(client, addr, payer_acct, payee_addr, repo, base, paths,
     return tx, secs
 
 
+def show(client, addr, deal_id, header):
+    d = read_deal(client, addr, deal_id)
+    print(f"{header} verdict: {d['verdict']} status={d['status']}",
+          flush=True)
+    for c in json.loads(d["condition_checks"]):
+        print(f"  {c['condition']}: {c['status']} - {c['evidence']}",
+              flush=True)
+    return d
+
+
 def main():
     account = load_account()
     client = create_client(chain=studionet, account=account)
@@ -154,7 +184,6 @@ def main():
              "private_key": payee.key.hex()}))
         PAYEE_KEYFILE.chmod(0o600)
     print("payee:", payee.address, flush=True)
-    # fund the payee wallet via the Studionet faucet RPC
     try:
         client.provider.make_request("sim_fundAccount",
                                      [payee.address, 5 * 10**18])
@@ -176,11 +205,7 @@ def main():
     s1_create = tx
     write(client, addr, "submit_commit", ["d1", HEAD_SHA], "s1_submit", account=payee)
     write(client, addr, "request_verification", ["d1"], "s1_verify")
-    d = read_deal(client, addr, "d1")
-    print(f"S1 verdict: {d['verdict']} status={d['status']}", flush=True)
-    for c in json.loads(d["condition_checks"]):
-        print(f"  {c['condition']}: {c['status']} - {c['evidence']}",
-              flush=True)
+    d = show(client, addr, "d1", "S1")
     results["S1"] = {"verdict": d["verdict"], "status": d["status"],
                      "create_tx": s1_create}
 
@@ -194,11 +219,7 @@ def main():
     s2_create = tx
     write(client, addr, "submit_commit", ["d2", HEAD_SHA], "s2_submit", account=payee)
     write(client, addr, "request_verification", ["d2"], "s2_verify")
-    d = read_deal(client, addr, "d2")
-    print(f"S2 verdict: {d['verdict']} status={d['status']}", flush=True)
-    for c in json.loads(d["condition_checks"]):
-        print(f"  {c['condition']}: {c['status']} - {c['evidence']}",
-              flush=True)
+    d = show(client, addr, "d2", "S2")
     results["S2"] = {"verdict": d["verdict"], "status": d["status"],
                      "create_tx": s2_create}
 
@@ -212,11 +233,7 @@ def main():
     s3_create = tx
     write(client, addr, "submit_commit", ["d3", "e" * 40], "s3_submit", account=payee)
     write(client, addr, "request_verification", ["d3"], "s3_verify")
-    d = read_deal(client, addr, "d3")
-    print(f"S3 verdict: {d['verdict']} status={d['status']}", flush=True)
-    for c in json.loads(d["condition_checks"]):
-        print(f"  {c['condition']}: {c['status']} - {c['evidence']}",
-              flush=True)
+    d = show(client, addr, "d3", "S3")
     results["S3"] = {"verdict": d["verdict"], "status": d["status"],
                      "create_tx": s3_create}
 
@@ -227,14 +244,48 @@ def main():
           ["d3", "https://faisalnugroho.github.io/commitscope-s1.txt"],
           "s4_dispute", account=payee)
     write(client, addr, "request_verification", ["d3"], "s4_verify")
-    d = read_deal(client, addr, "d3")
-    print(f"S4 verdict: {d['verdict']} status={d['status']} "
-          f"round={d['verification_round']}", flush=True)
-    for c in json.loads(d["condition_checks"]):
-        print(f"  {c['condition']}: {c['status']} - {c['evidence']}",
-              flush=True)
+    d = show(client, addr, "d3", "S4")
     results["S4"] = {"verdict": d["verdict"], "status": d["status"],
                      "round": d["verification_round"]}
+
+    # =============== S5: rename in-scope -> in-scope = Released ====
+    print("\n--- S5: rename in-scope->in-scope (Released) ---",
+          flush=True)
+    tx, _ = create_deal(
+        client, addr, payer, payee.address, REPO, R1_BASE, "tests/",
+        "S5-rename-inscope", "Smoke S5: real git-mv rename "
+        "tests/direct/helpers.py -> tests/direct/gh_helpers.py, both "
+        "sides inside allowed tests/ scope, green CI",
+        "s5_create")
+    s5_create = tx
+    write(client, addr, "submit_commit", ["d4", R1_HEAD], "s5_submit", account=payee)
+    write(client, addr, "request_verification", ["d4"], "s5_verify")
+    d = show(client, addr, "d4", "S5")
+    results["S5"] = {"verdict": d["verdict"], "status": d["status"],
+                     "create_tx": s5_create,
+                     "scope_evidence": [
+                         c["evidence"] for c in
+                         json.loads(d["condition_checks"])]}
+
+    # =============== S6: rename out-of-scope -> in-scope = Rejected
+    print("\n--- S6: rename out-of-scope->in-scope (Rejected) ---",
+          flush=True)
+    tx, _ = create_deal(
+        client, addr, payer, payee.address, REPO, R2_BASE, "tests/",
+        "S6-rename-outscope", "Smoke S6: real git-mv rename "
+        "docs/smoke_rename_provenance.md -> "
+        "tests/direct/smoke_rename_provenance.md - destination is in "
+        "scope but the SOURCE path is outside allowed tests/ scope",
+        "s6_create")
+    s6_create = tx
+    write(client, addr, "submit_commit", ["d5", R2_HEAD], "s6_submit", account=payee)
+    write(client, addr, "request_verification", ["d5"], "s6_verify")
+    d = show(client, addr, "d5", "S6")
+    results["S6"] = {"verdict": d["verdict"], "status": d["status"],
+                     "create_tx": s6_create,
+                     "scope_evidence": [
+                         c["evidence"] for c in
+                         json.loads(d["condition_checks"])]}
 
     # ---- summary ----
     log["results"] = results
@@ -252,7 +303,11 @@ def main():
         ok = False
     if results["S4"]["verdict"] != "Undetermined":
         ok = False
-    for k in ("S1", "S2", "S3", "S4"):
+    if results["S5"]["verdict"] != "Released":
+        ok = False
+    if results["S6"]["verdict"] != "Rejected":
+        ok = False
+    for k in ("S1", "S2", "S3", "S4", "S5", "S6"):
         print(f"{k}: {results[k]['verdict']} ({results[k]['status']})",
               flush=True)
     print("ALL_SCENARIOS_OK:", ok, flush=True)

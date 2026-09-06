@@ -1,111 +1,136 @@
 {
-  "contract": "0xAB8378c82C9EEee4ABDD979bb978FBB33ADe80E5",
-  "deploy_tx": "0xb0f91d9bb4a7ea224675718f726e92e8d42eb291342bb70dbcce838bf05b305a",
-  "note": "Clean evidence log: verdicts, transaction hashes, and condition checks, all read back from the live Studionet contract via get_deal. Tx-to-deal mapping verified by decoding each transaction calldata and correlating tx created_at with the deal's created_at_epoch (exact match for every create). No private keys or secrets are stored in this file; smoke keyfiles are gitignored and never tracked.",
-  "deals": {
-    "d1": {
-      "scenario": "S1 - Released (ancestry + scope + CI all positively proven)",
+  "started": "2026-09-06T03:56:48Z",
+  "deploy": {
+    "tx_hash": "0x2e37c6be14992c2bc012fe0f453fcf7f9327e96f3acf6673cd2bb0fe4aaeeb4f",
+    "address": "0x68571BEABCA01fD4eBc720916E7367bC6f233280",
+    "execution": "SUCCESS"
+  },
+  "s1_create": {
+    "tx_hash": "0x32cc93ec1858155deb6f5367023e47f7967a31f82f7c0beecffa9e1db0e1592a",
+    "secs": 38.3,
+    "execution": "SUCCESS"
+  },
+  "s1_submit": {
+    "tx_hash": "0x3ec81b17b6d41d9ee9a5c81c57239fa9472ddd848ea1caa47650e0d1bf2d668c",
+    "secs": 36.9,
+    "execution": "SUCCESS"
+  },
+  "s1_verify": {
+    "tx_hash": "0x1a6aa59e3686ca5606b01af552b9e63f20cb2368da6d6ebf526155b160d5931b",
+    "secs": 49.6,
+    "execution": "SUCCESS"
+  },
+  "s2_create": {
+    "tx_hash": "0x568d73b7ee9a12ba1484ba6c001abb5f33be30a465e2fee5da95f50bd124a99b",
+    "secs": 39.3,
+    "execution": "SUCCESS"
+  },
+  "s2_submit": {
+    "tx_hash": "0x0a5b8e852f71f10e847fc5bf1c24b4f2a9b7013de450d041df6f2d7dc9ca569d",
+    "secs": 40.3,
+    "execution": "SUCCESS"
+  },
+  "s2_verify": {
+    "tx_hash": "0xc2d4791b96ac849ac052048fb1f053f6f84cf68aee8bcd03a58d4cda8174704b",
+    "secs": 53.1,
+    "execution": "SUCCESS"
+  },
+  "s3_create": {
+    "tx_hash": "0xcc4be49442f0a67a9e50c025f62b2c33f7bae45cb19be1a1368e8c840638aba3",
+    "secs": 39.3,
+    "execution": "SUCCESS"
+  },
+  "s3_submit": {
+    "tx_hash": "0xaf694162624f78df9182b98c287295e73717934600a1ac1e541ce3cd2cd62735",
+    "secs": 36.0,
+    "execution": "SUCCESS"
+  },
+  "s3_verify": {
+    "tx_hash": "0x2d32546c7d75c2cc30fdab4efb933787c9a41253f255a4eb300f8b339a80df67",
+    "secs": 42.9,
+    "execution": "SUCCESS"
+  },
+  "s4_dispute": {
+    "tx_hash": "0x9ae55b72e21643bd9057b29d6f87c1617a06f819570c1b5fd0278e137be09e82",
+    "secs": 36.1,
+    "execution": "SUCCESS"
+  },
+  "s4_verify": {
+    "tx_hash": "0x2190419a44768dfeba03c3e52709f1328bfbf9dc73e81cee3c3dfd3765ec4423",
+    "secs": 44.3,
+    "execution": "SUCCESS"
+  },
+  "s5_create": {
+    "tx_hash": "0x12f5b5f76a9051beedcf978aebf29ad52d3fcf86800cd8a7e7cf9347671188ec",
+    "secs": 39.6,
+    "execution": "SUCCESS"
+  },
+  "s5_submit": {
+    "tx_hash": "0xda380ec11286d154fa551e8d43466a0e8a2727f9d2ca8a0002fe5f966d44c062",
+    "secs": 39.4,
+    "execution": "SUCCESS"
+  },
+  "s5_verify": {
+    "tx_hash": "0xcfb61024cf960f9234cbed444977c2eaa67415de545d5d850dff8247c45e064c",
+    "secs": 63.0,
+    "execution": "SUCCESS"
+  },
+  "s6_create": {
+    "tx_hash": "0x0230ee6cf6257f2598345d4d52ddeb5e65bd2f3acb1953fbc80aced1f6ba5047",
+    "secs": 36.1,
+    "execution": "SUCCESS"
+  },
+  "s6_submit": {
+    "tx_hash": "0x83f18c873f124edfeef4f6db28e10db360c5b64cbacbd45f3218e1bae6476124",
+    "secs": 36.3,
+    "execution": "SUCCESS"
+  },
+  "s6_verify": {
+    "tx_hash": "0xb090e16c03ecbc299f2b99ff1f64539ac1e12185ae3d922a32911aa20d6db574",
+    "secs": 94.5,
+    "execution": "SUCCESS"
+  },
+  "results": {
+    "S1": {
       "verdict": "Released",
       "status": "Released",
-      "create_tx": "0x0d88def7e0f9680102945cfddfeda641109969ff1bff8d7482c601ee28b8ccb7",
-      "submit_tx": "0x23d58989caa5cee3170c87e0d236d8fdfd648ef4460574b331034c5ef7ba3b32",
-      "verify_tx": "0x0f1396f966b353f0b9a57cd189c832332674a3cb343082505d048623461b8db3",
-      "condition_checks": [
-        {
-          "condition": "commit_ancestry",
-          "status": "PASS",
-          "evidence": "compare status is ahead - positive ancestry proof"
-        },
-        {
-          "condition": "diff_scope",
-          "status": "PASS",
-          "evidence": "all 2 changed files within allowed scope"
-        },
-        {
-          "condition": "ci_status",
-          "status": "PASS",
-          "evidence": "LLM cross-check confirms green CI: check_runs contains one entry with status 'completed' and conclusion 'success'"
-        }
-      ]
+      "create_tx": "0x32cc93ec1858155deb6f5367023e47f7967a31f82f7c0beecffa9e1db0e1592a"
     },
-    "d2": {
-      "scenario": "S2 - Rejected (changed files outside allowed contracts/ scope)",
+    "S2": {
       "verdict": "Rejected",
       "status": "Rejected",
-      "create_tx": "0x9d770f45a47aff628a9ffcecd5fb8c9831e1a2ce588beebc590d861d5f43df04",
-      "submit_tx": "0x616721e750c32fef8977b1eda6f01731d1eedf0948c2e6f1e7f76b416ad7b390",
-      "verify_tx": "0x5134adbcbd47833c5b7900892ef35840eeed3cdb4379e079af3087ff706223b1",
-      "condition_checks": [
-        {
-          "condition": "commit_ancestry",
-          "status": "PASS",
-          "evidence": "compare status is ahead - positive ancestry proof"
-        },
-        {
-          "condition": "diff_scope",
-          "status": "FAIL",
-          "evidence": "files outside allowed scope: .github/workflows/ci.yml,tests/direct/conftest.py"
-        },
-        {
-          "condition": "ci_status",
-          "status": "PASS",
-          "evidence": "LLM cross-check confirms green CI: all check-runs are 'completed' with conclusion 'success'"
-        }
-      ]
+      "create_tx": "0x568d73b7ee9a12ba1484ba6c001abb5f33be30a465e2fee5da95f50bd124a99b"
     },
-    "d3": {
-      "scenario": "S3a - Undetermined (payee submitted a nonexistent commit sha; GitHub compare 404) plus S4 - dispute round 2 re-ran the same consensus and stayed Undetermined (fail-safe on the dispute path)",
+    "S3": {
       "verdict": "Undetermined",
       "status": "Undetermined",
-      "round": 2,
-      "disputes": 1,
-      "create_tx": "0x989c37d03cc63a09ce3a901a6219dbbbc8543ccef230d1a0670eb4e9bebad214",
-      "submit_tx": "0x8e230e7e8e4c2b534ae9c9b65377012decfcee1a2418f610deb92dffc03ae495",
-      "verify_tx": "0x9dd24f05047d0f20b4f0b39604c4dfe96af9b2fbcca40e6c90ed329cac1bd11c",
-      "dispute_tx": "0x022e10910ba6bcaed5802929e642db229361fcf33a1bb87899d4a0fe42f5ffe3",
-      "verify_round2_tx": "0x6e10b218e0a9761cfa37b2f7d6f5913084991d39646160170593bb30c22ff347",
-      "condition_checks": [
-        {
-          "condition": "commit_ancestry",
-          "status": "UNCERTAIN",
-          "evidence": "compare view failed: http_status_404"
-        },
-        {
-          "condition": "diff_scope",
-          "status": "UNCERTAIN",
-          "evidence": "compare view failed: http_status_404"
-        },
-        {
-          "condition": "ci_status",
-          "status": "UNCERTAIN",
-          "evidence": "compare view failed: http_status_404"
-        }
-      ]
+      "create_tx": "0xcc4be49442f0a67a9e50c025f62b2c33f7bae45cb19be1a1368e8c840638aba3"
     },
-    "d4": {
-      "scenario": "S3b - Undetermined (nonexistent repository faisalnugroho/this-repo-does-not-exist-xyz; GitHub compare 404)",
+    "S4": {
       "verdict": "Undetermined",
       "status": "Undetermined",
-      "create_tx": "0x0eecf7481bdaf1b033eb92f973f6bcd4bd72f529f90b53b4a66ed678ac2bd13a",
-      "submit_tx": "0xa75963bfb2bb7e80b7ec8fd015d676144b2cf6f057ff9f6ca81bb5bc35b27974",
-      "verify_tx": "0x76fb206e38551193639a3d2a7dbbb8d06d34f82c6a909111dd6c98d79e2a6dfa",
-      "condition_checks": [
-        {
-          "condition": "commit_ancestry",
-          "status": "UNCERTAIN",
-          "evidence": "compare view failed: http_status_404"
-        },
-        {
-          "condition": "diff_scope",
-          "status": "UNCERTAIN",
-          "evidence": "compare view failed: http_status_404"
-        },
-        {
-          "condition": "ci_status",
-          "status": "UNCERTAIN",
-          "evidence": "compare view failed: http_status_404"
-        }
+      "round": 2
+    },
+    "S5": {
+      "verdict": "Released",
+      "status": "Released",
+      "create_tx": "0x12f5b5f76a9051beedcf978aebf29ad52d3fcf86800cd8a7e7cf9347671188ec",
+      "scope_evidence": [
+        "compare status is ahead - positive ancestry proof",
+        "all 7 changed files within allowed scope (renames validated on both source and destination paths)",
+        "LLM cross-check confirms green CI: The check-run status is 'completed' with conclusion 'success'."
+      ]
+    },
+    "S6": {
+      "verdict": "Undetermined",
+      "status": "Undetermined",
+      "create_tx": "0x0230ee6cf6257f2598345d4d52ddeb5e65bd2f3acb1953fbc80aced1f6ba5047",
+      "scope_evidence": [
+        "compare view failed: http_status_403",
+        "compare view failed: http_status_403",
+        "compare view failed: http_status_403"
       ]
     }
-  }
+  },
+  "finished": "2026-09-06T04:10:23Z"
 }

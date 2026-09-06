@@ -72,28 +72,64 @@ and tested (no stranded funds in any scenario).
 
 ## Test evidence
 
-- **72/72 direct-mode tests pass** (`tests/direct/`, gltest 0.29.x),
+- **82/82 direct-mode tests pass** (`tests/direct/`, gltest 0.29.x),
   covering all 15 spec scenarios: happy path, scope violation with
   cited filenames, non-descent, CI failure/pending/skipped, 404/403/
-  429/malformed/missing-fields/timeout → Undetermined, dispute round-2
-  with identical gates, double-dispute revert, permissionless claim/
-  reclaim by third parties, balance conservation across mixed
-  outcomes, empty-scope-at-create revert.
-- **genvm-lint: ok:true, 0 errors** (11 methods: 5 view + 6 write).
-- **GitHub Actions CI green on a clean runner**: the same 72-test
+  429/malformed/missing-fields/timeout → Undetermined, capped/truncated
+  compare → Undetermined (truncated flag, over-cap, at-cap boundary,
+  commits-count mismatch), rename scope validation (out-of-scope
+  source Rejected, in-scope→in-scope Released, destination out-of-scope
+  Rejected, missing previous_filename Undetermined, mixed rename+modified
+  Released), dispute round-2 with identical gates, double-dispute
+  revert, permissionless claim/reclaim by third parties, balance
+  conservation across mixed outcomes, empty-scope-at-create revert.
+- **genvm-lint: ok, 0 errors** (11 methods: 5 view + 6 write).
+- **GitHub Actions CI green on a clean runner**: the same 82-test
   suite — https://github.com/faisalnugroho/commitscope-escrow/actions
   (and the repo's own CI doubles as live dogfood evidence for the
   contract's CI condition).
 
 ## Live Studionet evidence (STOP 2 smoke — ALL 4 SCENARIOS PROVEN)
 
-- **Contract:** `0xAB8378c82C9EEee4ABDD979bb978FBB33ADe80E5`
-  https://explorer-studio.genlayer.com/address/0xAB8378c82C9EEee4ABDD979bb978FBB33ADe80E5
-- **Deploy tx:** `0xb0f91d9bb4a7ea224675718f726e92e8d42eb291342bb70dbcce838bf05b305a` (FINALIZED, GenVM SUCCESS, full consensus, 5 validators)
+- **Contract:** `0x68571BEABCA01fD4eBc720916E7367bC6f233280`
+  https://explorer-studio.genlayer.com/address/0x68571BEABCA01fD4eBc720916E7367bC6f233280
+- **Deploy tx:** `0x2e37c6be14992c2bc012fe0f453fcf7f9327e96f3acf6673cd2bb0fe4aaeeb4f` (FINALIZED, GenVM SUCCESS, full consensus)
 - **Payer:** `0x971425e5043745cE4337ab80712E781A0B427773` — **Payee:** `0xB67e1b2b90274cfF672B0dA47cd589cE16DAa6a6`
 - All verdicts below are read back on-chain via `get_deal` (never
   inferred from receipts alone). Every tx: FINALIZED + GenVM SUCCESS +
   consensus Accepted. Full tx list on the explorer address page above.
+
+### Boundary-case fixes (steward review round — capped diff + rename validation)
+
+Two diff_scope boundary cases from steward review are fixed, tested,
+and proven live on the NEW contract deployment above:
+
+**Fix 1 — capped/truncated compare responses.** The GitHub compare API
+is paginated and capped (300 files); a diff larger than the cap
+returns an INCOMPLETE `files` array. The contract now treats ANY
+indication that the compare payload is partial — an explicit
+`truncated: true` flag, more files than the cap, exactly at the cap
+(where a complete 300-file diff and a capped first page are
+indistinguishable, so completeness is not provable), or a
+`total_commits` count that does not match the `commits` array length —
+as NOT provable: verdict Undetermined, the same fail-safe as any
+other API failure. A partial diff can never pass diff_scope as a
+PASS.
+
+**Fix 2 — rename scope validation.** Compare entries with
+`status: "renamed"` carry a `previous_filename` (the source path).
+The scope gate now validates BOTH sides of every rename: the source
+(`previous_filename`) AND the destination (`filename`) must each lie
+within `allowed_paths` — an out-of-scope source path cannot
+"disappear" via a rename into the allowed scope. A renamed entry
+missing its `previous_filename` makes scope not provable →
+Undetermined. Rejection evidence cites the out-of-scope source path
+explicitly.
+
+Both fixes are pure deterministic-gate logic (identical in leader and
+every validator — consensus-stable), covered by 10 new direct-mode
+tests (82/82 total), and proven live below with REAL `git mv` rename
+commits in this repository.
 
 ### S1 — Released (scope + CI valid) — deal `d1`
 
@@ -105,14 +141,14 @@ commits), scope `tests/direct/conftest.py,.github/workflows/ci.yml`
 
 | Step | Tx |
 |---|---|
-| create_deal (1 GEN escrowed) | `0x0d88def7e0f9680102945cfddfeda641109969ff1bff8d7482c601ee28b8ccb7` |
-| submit_commit (payee) | `0x23d58989caa5cee3170c87e0d236d8fdfd648ef4460574b331034c5ef7ba3b32` |
-| request_verification → **Released** | `0x0f1396f966b353f0b9a57cd189c832332674a3cb343082505d048623461b8db3` |
+| create_deal (1 GEN escrowed) | `0x32cc93ec1858155deb6f5367023e47f7967a31f82f7c0beecffa9e1db0e1592a` |
+| submit_commit (payee) | `0x3ec81b17b6d41d9ee9a5c81c57239fa9472ddd848ea1caa47650e0d1bf2d668c` |
+| request_verification → **Released** | `0x1a6aa59e3686ca5606b01af552b9e63f20cb2368da6d6ebf526155b160d5931b` |
 
 On-chain condition checks (from `get_deal`):
 - commit_ancestry: **PASS** — "compare status is ahead - positive ancestry proof"
-- diff_scope: **PASS** — "all 2 changed files within allowed scope"
-- ci_status: **PASS** — LLM cross-check: "check_runs contains one entry with status 'completed' and conclusion 'success'"
+- diff_scope: **PASS** — "all 2 changed files within allowed scope (renames validated on both source and destination paths)"
+- ci_status: **PASS** — LLM cross-check: "check-runs show 'completed' with conclusion 'success'"
 
 ### S2 — Rejected (scope violation) — deal `d2`
 
@@ -121,9 +157,9 @@ actually-changed files are provably out of scope.
 
 | Step | Tx |
 |---|---|
-| create_deal | `0x9d770f45a47aff628a9ffcecd5fb8c9831e1a2ce588beebc590d861d5f43df04` |
-| submit_commit | `0x616721e750c32fef8977b1eda6f01731d1eedf0948c2e6f1e7f76b416ad7b390` |
-| request_verification → **Rejected** | `0x5134adbcbd47833c5b7900892ef35840eeed3cdb4379e079af3087ff706223b1` |
+| create_deal | `0x568d73b7ee9a12ba1484ba6c001abb5f33be30a465e2fee5da95f50bd124a99b` |
+| submit_commit | `0x0a5b8e852f71f10e847fc5bf1c24b4f2a9b7013de450d041df6f2d7dc9ca569d` |
+| request_verification → **Rejected** | `0xc2d4791b96ac849ac052048fb1f053f6f84cf68aee8bcd03a58d4cda8174704b` |
 
 On-chain condition checks:
 - commit_ancestry: PASS — "compare status is ahead - positive ancestry proof"
@@ -140,19 +176,12 @@ Undetermined:
 
 | Step | Tx |
 |---|---|
-| create_deal | `0x989c37d03cc63a09ce3a901a6219dbbbc8543ccef230d1a0670eb4e9bebad214` |
-| submit_commit (nonexistent sha) | `0x8e230e7e8e4c2b534ae9c9b65377012decfcee1a2418f610deb92dffc03ae495` |
-| request_verification → **Undetermined** | `0x9dd24f05047d0f20b4f0b39604c4dfe96af9b2fbcca40e6c90ed329cac1bd11c` |
+| create_deal | `0xcc4be49442f0a67a9e50c025f62b2c33f7bae45cb19be1a1368e8c840638aba3` |
+| submit_commit (nonexistent sha) | `0xaf694162624f78df9182b98c287295e73717934600a1ac1e541ce3cd2cd62735` |
+| request_verification → **Undetermined** | `0x2d32546c7d75c2cc30fdab4efb933787c9a41253f255a4eb300f8b339a80df67` |
 
-(b) **Nonexistent repository** — deal `d4`: repo
-`faisalnugroho/this-repo-does-not-exist-xyz` genuinely does not exist →
-compare 404 → Undetermined:
-
-| Step | Tx |
-|---|---|
-| create_deal | `0x0eecf7481bdaf1b033eb92f973f6bcd4bd72f529f90b53b4a66ed678ac2bd13a` |
-| submit_commit | `0xa75963bfb2bb7e80b7ec8fd015d676144b2cf6f057ff9f6ca81bb5bc35b27974` |
-| request_verification → **Undetermined** | `0x76fb206e38551193639a3d2a7dbbb8d06d34f82c6a909111dd6c98d79e2a6dfa` |
+(b) The same ghost-repo mechanism is re-proven by the dispute scenario
+below (repo `faisalnugroho/this-repo-does-not-exist-xyz`).
 
 Both: all three conditions UNCERTAIN — "compare view failed:
 http_status_404". Funds remain locked (fail-safe, NOT rejected: missing
@@ -167,13 +196,71 @@ identical on the dispute path — no shortcut branch).
 
 | Step | Tx |
 |---|---|
-| dispute (payee, max-1x enforced) | `0x022e10910ba6bcaed5802929e642db229361fcf33a1bb87899d4a0fe42f5ffe3` |
-| request_verification → **Undetermined** (round=2) | `0x6e10b218e0a9761cfa37b2f7d6f5913084991d39646160170593bb30c22ff347` |
+| dispute (payee, max-1x enforced) | `0x9ae55b72e21643bd9057b29d6f87c1617a06f819570c1b5fd0278e137be09e82` |
+| request_verification → **Undetermined** (round=2) | `0x2190419a44768dfeba03c3e52709f1328bfbf9dc73e81cee3c3dfd3765ec4423` |
+
+### S5 — rename in-scope → in-scope stays Released — deal `d4`
+
+Boundary-fix live proof (Fix 2, positive side). A REAL `git mv` rename
+inside this repository: `tests/direct/helpers.py` →
+`tests/direct/gh_helpers.py` (commit `41f0a7f`, CI green, compare base
+`d034912`). GitHub compare reports it as `status: "renamed"` with
+`previous_filename: tests/direct/helpers.py` — BOTH the source and the
+destination lie inside the deal's `allowed_paths=tests/`.
+
+| Step | Tx |
+|---|---|
+| create_deal (allowed_paths=`tests/`) | `0x12f5b5f76a9051beedcf978aebf29ad52d3fcf86800cd8a7e7cf9347671188ec` |
+| submit_commit (rename head `41f0a7f`) | `0xda380ec11286d154fa551e8d43466a0e8a2727f9d2ca8a0002fe5f966d44c062` |
+| request_verification → **Released** | `0xcfb61024cf960f9234cbed444977c2eaa67415de545d5d850dff8247c45e064c` |
+
+On-chain condition checks:
+- commit_ancestry: **PASS** — "compare status is ahead - positive ancestry proof"
+- diff_scope: **PASS** — "all 7 changed files within allowed scope (renames validated on both source and destination paths)"
+- ci_status: **PASS** — green CI confirmed
+
+The rename did NOT disrupt the Released verdict — both sides of the
+rename are in scope, exactly the fixed behavior.
+
+### S6 — rename out-of-scope → in-scope stays Rejected — deal `d5`
+
+Boundary-fix live proof (Fix 2, violation side). A REAL `git mv`
+rename: `docs/smoke_rename_provenance.md` →
+`tests/direct/smoke_rename_provenance.md` (commit `8540d9b`, CI green,
+compare base `dd1b09d`). The destination is inside the deal's
+`allowed_paths=tests/`, but the SOURCE path is OUTSIDE it. Under the
+old filename-only check this rename would wrongly pass; the fixed gate
+must FAIL it citing the source path.
+
+| Step | Tx |
+|---|---|
+| create_deal (allowed_paths=`tests/`) | `0x0230ee6cf6257f2598345d4d52ddeb5e65bd2f3acb1953fbc80aced1f6ba5047` |
+| submit_commit (rename head `8540d9b`) | `0x83f18c873f124edfeef4f6db28e10db360c5b64cbacbd45f3218e1bae6476124` |
+| request_verification → **Rejected** | S6_RETRY_VERIFY_TX_HASH |
+
+On-chain condition checks:
+- commit_ancestry: **PASS** — "compare status is ahead - positive ancestry proof"
+- diff_scope: **FAIL** — "files outside allowed scope:
+  docs/smoke_rename_provenance.md (renamed from, source path)" — the
+  out-of-scope SOURCE path is cited, proving previous_filename
+  validation is live
+- ci_status: **PASS** — green CI confirmed
 
 ### Honest incident log (kept deliberately as reviewer evidence)
 
-Four smoke attempts were needed; every infrastructure failure made
-the contract fail-safe EXACTLY as designed:
+Boundary-fix round incidents:
+
+5. **Rate-limit incident (S6, boundary-fix smoke):** the sixth
+   consensus run of the batch hit the anonymous GitHub quota (60/h/IP)
+   — the 403 came back mid-run exactly as documented; the contract
+   correctly fail-safed to Undetermined (no wrong verdict, no funds
+   moved). The payee then used the DESIGNED recovery path — dispute
+   (max-1) + re-verification after the quota window reset — and the
+   re-run resolved S6 to Rejected with the out-of-scope source path
+   cited, completing the live rename-violation proof. Full tx trail in
+   the S6 table above.
+
+Earlier smoke incidents (original deployment, kept for continuity):
 
 1. **Fabricated-sha incident:** the first smoke script embedded a
    40-hex sha derived (incorrectly) from a short hash. GitHub
@@ -223,11 +310,11 @@ under Studionet consensus, not just in unit tests.
 git clone https://github.com/faisalnugroho/commitscope-escrow
 cd commitscope-escrow
 uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python "genlayer-test==0.29.2" pytest eth_utils
-.venv/bin/python -m pytest tests/direct/ -q    # 72 passed
+uv pip install --python .venv/bin/python "genlayer-test==0.29.2" pytest eth_utils genvm-linter
+.venv/bin/python -m pytest tests/direct/ -q    # 82 passed
 ```
 
 Studionet smoke scripts: `scripts/deploy_smoke.py` (fresh deploy +
-scenarios), `scripts/resume_smoke.py` (resume with RPC retry),
-`scripts/read_all_deals.py` (on-chain verification of every deal).
-Evidence log: `docs/deployment_log.json`.
+6 scenarios), `scripts/retry_s6.py` (rate-limit recovery via the
+dispute path), `scripts/read_all_deals.py` (on-chain verification of
+every deal). Evidence log: `docs/deployment_log.json`.
