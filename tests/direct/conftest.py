@@ -15,7 +15,7 @@ CONTRACT_PATH = Path(__file__).resolve().parents[2] / \
     "contracts" / "commit_scope_escrow.py"
 setup_sdk_paths(CONTRACT_PATH)
 
-import helpers as H
+import gh_helpers as H
 
 
 @pytest.fixture()

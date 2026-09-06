@@ -3,7 +3,7 @@ fail-safe Undetermined family (spec tests #1-#9)."""
 import json
 import pytest
 
-import helpers as H
+import gh_helpers as H
 
 CONDITIONS = ["commit_ancestry", "diff_scope", "ci_status"]
 

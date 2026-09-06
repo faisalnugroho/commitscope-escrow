@@ -3,7 +3,7 @@
 import json
 import pytest
 
-import helpers as H
+import gh_helpers as H
 
 AMOUNT = H.AMOUNT
 TIMEOUT = 5 * 24 * 3600

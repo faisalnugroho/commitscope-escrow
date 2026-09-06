@@ -7,7 +7,7 @@ a dispute, the result stays Undetermined.
 import json
 import pytest
 
-import helpers as H
+import gh_helpers as H
 
 
 class TestDisputeRound2:

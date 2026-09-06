@@ -7,7 +7,7 @@ deal that could never be positively verified must not exist.
 import json
 import pytest
 
-import helpers as H
+import gh_helpers as H
 
 AMOUNT = H.AMOUNT
 
